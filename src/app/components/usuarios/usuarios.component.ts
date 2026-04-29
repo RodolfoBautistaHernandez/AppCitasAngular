@@ -1,8 +1,9 @@
 import { AfterViewInit, Component, ElementRef, OnInit, ViewChild } from '@angular/core';
-import { UsuarioResponse } from '../../models/Usuario.model';
+import { UsuarioRequest, UsuarioResponse } from '../../models/Usuario.model';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { DescripcionRoles, Roles } from '../../constanis/Roles';
 import Swal from 'sweetalert2';
+import { UsuariosService } from '../../services/usuarios.service';
 
 
 declare var bootstrap: any;
@@ -26,8 +27,13 @@ export class UsuariosComponent implements OnInit, AfterViewInit {
   usuarioModalEl!: ElementRef;
 
   private modalInstance!: any;
+ 
 
-  constructor(private fb: FormBuilder) {
+   constructor(
+    private fb: FormBuilder,
+    private usuariosService: UsuariosService
+
+  ) {
     this.usuarioForm = this.fb.group({
       username: ['', [Validators.required, Validators.minLength(5), Validators.maxLength(20)]],
       password: ['', [Validators.required, Validators.minLength(8)]],
@@ -36,7 +42,7 @@ export class UsuariosComponent implements OnInit, AfterViewInit {
   }
 
   ngOnInit(): void {
-    this.llenarLista();
+    this.listarUsuarios();
   }
 
   ngAfterViewInit(): void {
@@ -46,13 +52,25 @@ export class UsuariosComponent implements OnInit, AfterViewInit {
 
     });
   }
+  listarUsuarios(): void{
+    this.usuariosService.getUsuarios().subscribe({
+      next: resp => {
+        this.usuarios = resp;
+      },
+      error: (error) =>{
+        console.log('Erro al listar usuarios: ', error);
+        Swal.fire('Error', 'No se pudieron cargar los usuarios', 'error');
+      }
+    })
 
-  llenarLista(): void {
+  }
+
+ /*  llenarLista(): void {
     this.usuarios = [
       { username: 'admin', roles: ['ROLE_ADMIN'] },
       { username: 'usuario', roles: ['ROLE_USER'] }
     ];
-  }
+  } */
 
   toggleForm(): void {
     this.resetFrom();
@@ -83,11 +101,43 @@ export class UsuariosComponent implements OnInit, AfterViewInit {
     //console.info('Valor del formulario: ', this.usuarioForm.value)
     if(this.usuarioForm.invalid)return;
 
-    const usuarioData: UsuarioResponse = this.usuarioForm.value;
+    const usuarioData: UsuarioRequest = this.usuarioForm.value;
 
-    this.usuarios.push(usuarioData);
+    if(this.isEditMode && this.selectedUsuario){
+
+      this.usuariosService.postUsuario(usuarioData).subscribe({
+      next: usuarioActualizando =>{
+
+        const index: number = this.usuarios.findIndex(usuario => usuario.username == this.selectedUsuario?.username);
+        if(index !== -1) this.usuarios[index] = usuarioActualizando;
+        
     Swal.fire('Registrado', 'Usuario registrado correctamente', 'success');
     this.modalInstance.hiden();
+
+      },
+      error: (error) => {
+        console.log('Error al registrar usuario: ', error);
+        Swal.fire('Error', 'No se pudo registrar el usuario', 'error');
+      }
+    });
+
+    } else{
+      this.usuariosService.postUsuario(usuarioData).subscribe({
+      next: nuevoUsuario =>{
+        this.usuarios.push(usuarioData);
+    Swal.fire('Registrado', 'Usuario registrado correctamente', 'success');
+    this.modalInstance.hiden();
+
+      },
+      error: (error) => {
+        console.log('Error al registrar usuario: ', error);
+        Swal.fire('Error', 'No se pudo registrar el usuario', 'error');
+      }
+    });
+
+    }
+    
+    
 
   }
 
@@ -101,11 +151,21 @@ export class UsuariosComponent implements OnInit, AfterViewInit {
       cancelButtonText: 'Cancelar'
     }).then(result =>{
       if(result.isConfirmed){
-      this.usuarios = this.usuarios.filter(u => u.username !== username);
+        this.usuariosService.deleteUsuario(username).subscribe({
+          next: () => {
+            this.usuarios = this.usuarios.filter(u => u.username !== username);
     Swal.fire('Eliminado', 'Usuario eliminado correctamente', 'success');
-    }
+          },
+          error: (error) => {
+        console.log('Error al eliminar usuario: ', error);
+        Swal.fire('Error', 'No se pudo eliminar el usuario', 'error');
+      }
+        });
+    
+      }
     });
     
   }
 
-}
+  }
+  
